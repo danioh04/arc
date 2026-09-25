@@ -1,0 +1,25 @@
+{
+  "component_anchors": {
+    "bpm_mean": -0.723,
+    "bpm_std": 2.7446,
+    "vorp_mean": 2.0907,
+    "vorp_std": 3.7539,
+    "mpg_mean": 21.1492,
+    "mpg_std": 7.4908
+  },
+  "tier_boundaries": [
+    -0.1915,
+    0.4717,
+    1.2816,
+    1.9251
+  ],
+  "tier_percentiles": [
+    50.0,
+    75.0,
+    90.0,
+    96.0
+  ],
+  "vorp_window_years": 3,
+  "sentinel_composite_z": -2.0764,
+  "sentinel_margin": 0.25
+}

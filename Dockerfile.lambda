@@ -1,0 +1,17 @@
+FROM public.ecr.aws/lambda/python:3.12
+
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+COPY pyproject.toml README.md* LICENSE ${LAMBDA_TASK_ROOT}/
+COPY arc/ ${LAMBDA_TASK_ROOT}/arc/
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir ${LAMBDA_TASK_ROOT} && \
+    (pip uninstall -y nvidia-nccl-cu13 || echo "NCCL not present; nothing to remove")
+
+RUN python -c "import arc.main; print('arc package import ok')"
+
+COPY artifacts/ ${LAMBDA_TASK_ROOT}/artifacts/
+COPY data/nba_prospects.db ${LAMBDA_TASK_ROOT}/data/nba_prospects.db
+
+CMD ["arc.main.handler"]

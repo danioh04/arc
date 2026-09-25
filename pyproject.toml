@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arc"
+version = "0.1.0"
+description = "An NBA prospect evaluation platform"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0,<1",
+    "pydantic>=2.8.0,<3",
+    "sqlalchemy>=2.0.32,<3",
+    "pandas==3.0.5",
+    "numpy==2.5.3",
+    "scipy==1.18.1",
+    "scikit-learn==1.9.1",
+    "xgboost==3.4.1",
+    "joblib==1.6.0",
+    "redis>=5.0.8,<9",
+    "mangum>=0.17.0,<1",
+]
+
+[project.optional-dependencies]
+pipeline = [
+    "requests>=2.32.3,<3",
+    "lxml>=5.0.0,<7",
+]
+server = [
+    "uvicorn[standard]>=0.30.0,<1",
+]
+dev = [
+    "ruff==0.16.7",
+    "mypy==2.3.1",
+    "pytest>=8.3.2",
+    "httpx2>=2.13.1",
+]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "F", "E", "B",
+    "I", "UP", "N", "SIM", "RUF",
+    "FAST", "BLE",
+]
+ignore = [
+    "E501",
+]
+allowed-confusables = ["σ"]
+
+[tool.setuptools.packages.find]
+include = ["arc*"]
