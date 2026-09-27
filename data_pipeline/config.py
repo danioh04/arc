@@ -16,7 +16,7 @@ MAX_COLLEGE_GAP = 5
 TRAIN_MAX_YEAR = 2019
 HOLDOUT_MAX_YEAR = 2022
 
-MODEL_VERSION = "v1.0-xgboost-regressor"
+MODEL_VERSION = "v1.1-xgboost-regressor"
 
 GENERATED_DIR = ROOT / "data" / "generated"
 TORVIK_RAW_DIR = ROOT / "data" / "raw" / "torvik"

@@ -13,7 +13,7 @@ from arc.ml.tiers import MIN_CAREER_GAMES, calculate_outcome_tier, calculate_tie
 from data_pipeline.config import LABELLED_PATH, SERVING_PLAYERS_PATH, SERVING_SEASONS_PATH
 from data_pipeline.identity import careers_by_player_page, resolve_college_identity
 from data_pipeline.labels import ComponentAnchors, calculate_composite_z
-from data_pipeline.training.evaluation import spearman, top_k_star_precision
+from data_pipeline.training.evaluation import per_draft_comparison, per_draft_star_hits, spearman, top_k_star_precision
 from data_pipeline.training.model_card import TRACKED_LIBRARIES, dataset_fingerprint
 
 MIN_SPEARMAN = 0.20
@@ -158,3 +158,16 @@ def test_same_name_nba_players_in_the_same_seasons_get_one_career_each():
     ]
     careers = careers_by_player_page(seasons)
     assert [[season["season_end"] for season in career] for career in careers] == [[2009, 2010], [2009]]
+
+
+def test_per_draft_star_hits_ranks_within_each_class_and_the_draft_skips_undrafted_players():
+    tiers = np.array([0, 4, 1, 4, 4, 0])
+    years = np.array([2020, 2020, 2020, 2021, 2021, 2021])
+    scores = np.array([0.9, 0.8, 0.1, 0.7, 0.2, 0.5])
+    picks = np.array([2.0, 1.0, np.nan, np.nan, 5.0, 9.0])
+    assert per_draft_star_hits(tiers, scores, years, k=1) == 1
+    assert per_draft_star_hits(tiers, scores, years, k=2) == 2
+    comparison = per_draft_comparison(tiers, scores, picks, years)
+    assert comparison["stars"] == 3
+    assert comparison["top_5"] == {"model": 3, "draft_order": 3}
+    assert per_draft_star_hits(tiers, -np.where(np.isnan(picks), np.inf, picks), years, k=1) == 0

@@ -10,7 +10,12 @@ from xgboost import XGBRegressor
 from arc.ml.feature_engineering import FEATURE_COLUMNS, engineer_features
 from arc.ml.tiers import calculate_tier_probabilities
 from data_pipeline.config import IDENTITY_EXCLUSIONS_PATH, LABEL_SPEC_PATH
-from data_pipeline.training.evaluation import draft_order_baseline, spearman, top_k_star_precision
+from data_pipeline.training.evaluation import (
+    draft_order_baseline,
+    per_draft_comparison,
+    spearman,
+    top_k_star_precision,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,21 +31,25 @@ MONOTONE_DIRECTIONS = {
     "dbpm": 1,
 }
 
-
-XGB_PARAMS = {
-    "max_depth": 2,
-    "learning_rate": 0.13,
-    "n_estimators": 90,
-    "min_child_weight": 5,
-    "subsample": 1.0,
-    "colsample_bytree": 0.60,
-    "reg_alpha": 0.05,
-    "reg_lambda": 1.20,
-    "gamma": 0.10,
+FIXED_XGB_PARAMS = {
     "objective": "reg:squarederror",
     "random_state": 42,
     "n_jobs": 1,
 }
+
+TUNED_XGB_PARAMS = {
+    "max_depth": 2,
+    "learning_rate": 0.0256,
+    "n_estimators": 400,
+    "min_child_weight": 1,
+    "subsample": 0.7,
+    "colsample_bytree": 1.0,
+    "reg_alpha": 0.5,
+    "reg_lambda": 10,
+    "gamma": 0.1,
+}
+
+XGB_PARAMS = {**TUNED_XGB_PARAMS, **FIXED_XGB_PARAMS}
 
 
 class OutcomeModel(NamedTuple):
@@ -58,14 +67,14 @@ def load_label_spec() -> dict:
     return json.loads(LABEL_SPEC_PATH.read_text(encoding="utf-8"))
 
 
-def _build_estimator() -> XGBRegressor:
+def build_estimator(params: dict[str, Any] = XGB_PARAMS) -> XGBRegressor:
     return XGBRegressor(
-        **XGB_PARAMS,
+        **params,
         monotone_constraints=tuple(MONOTONE_DIRECTIONS.get(column, 0) for column in FEATURE_COLUMNS),
     )
 
 
-def _target_z(df: pd.DataFrame, sentinel: float) -> np.ndarray:
+def target_z(df: pd.DataFrame, sentinel: float) -> np.ndarray:
     return df["composite_z"].fillna(sentinel).to_numpy(dtype=float)
 
 
@@ -73,7 +82,7 @@ def _out_of_fold_predictions(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     folds = KFold(n_splits=5, shuffle=True, random_state=42)
     out_of_fold = np.zeros_like(y, dtype=float)
     for train_idx, valid_idx in folds.split(x):
-        fold_model = _build_estimator()
+        fold_model = build_estimator()
         fold_model.fit(x[train_idx], y[train_idx])
         out_of_fold[valid_idx] = fold_model.predict(x[valid_idx])
     return out_of_fold
@@ -89,17 +98,17 @@ def train_outcome_model(train_df: pd.DataFrame, holdout_df: pd.DataFrame, label_
     boundaries = [float(value) for value in label_spec["tier_boundaries"]]
     sentinel = float(label_spec["sentinel_composite_z"])
     x_train = engineer_features(train_df)[FEATURE_COLUMNS].to_numpy(dtype=float)
-    y_train = _target_z(train_df, sentinel)
+    y_train = target_z(train_df, sentinel)
     out_of_fold = _out_of_fold_predictions(x_train, y_train)
     cv_spearman = spearman(y_train, out_of_fold)
     residuals = y_train - out_of_fold
     sigma = float(np.std(residuals))
     residuals_sorted = [float(value) for value in np.sort(residuals)]
     logger.info(f"Cross-validated Spearman {cv_spearman:.4f}; residual sigma {sigma:.4f}")
-    model = _build_estimator()
+    model = build_estimator()
     model.fit(x_train, y_train)
     x_holdout = engineer_features(holdout_df)[FEATURE_COLUMNS].to_numpy(dtype=float)
-    y_holdout_z = _target_z(holdout_df, sentinel)
+    y_holdout_z = target_z(holdout_df, sentinel)
     y_holdout_class = (holdout_df["career_tier"] - 1).astype(int).to_numpy()
     projected_z = model.predict(x_holdout)
     error = y_holdout_z - projected_z
@@ -127,6 +136,9 @@ def train_outcome_model(train_df: pd.DataFrame, holdout_df: pd.DataFrame, label_
         "baselines": {
             "draft_market_order": draft_order_baseline(holdout_df["overall_pick"], y_holdout_class, y_holdout_z),
         },
+        "per_draft_stars": per_draft_comparison(
+            y_holdout_class, projected_z, holdout_df["overall_pick"], holdout_df["cohort_year"]
+        ),
     }
     logger.info(f"Backtest Evaluation - Continuous R2: {r2:.4f}, Spearman Corr: {spearman_corr:.4f}")
     return OutcomeModel(regressor=model, residuals=residuals_sorted, sigma=sigma, metrics=metrics)
